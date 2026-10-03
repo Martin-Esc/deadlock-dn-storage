@@ -6,54 +6,62 @@
 </head>
 <body>
 <script>
-// Save page for the damage numbers settings menu.
-// Published on GitHub Pages and loaded into a hidden 2x2 CitadelHTMLPanel by dn_menu.js
-// (minimalhealthbar mod, Deadlock HUD mod). It keeps the menu settings in this page's
-// localStorage and talks back to the HUD through document.title, which the HUD
-// receives as the HTMLTitle event.
-//   On load:       title = DNSAVE|load|ok|<launch count>|<settings JSON or empty>
-//   dnSave(text):  stores text (URI-encoded JSON), title = DNSAVE|saved|<n>|<length>
-//   On any error:  title = DNSAVE|error|<where>|<message>
-// The launch count increases on every load, so a log showing 1, then 2 after a
-// game restart proves the storage survives restarts.
+// Save page for the damage numbers settings menu (Deadlock HUD mod).
+// Published on GitHub Pages and loaded into a hidden 2x2 CitadelHTMLPanel by
+// dn_menu.js (minimalhealthbar mod). It keeps the menu settings in this page's
+// localStorage, on the player's PC, and talks back to the HUD through
+// document.title, which the HUD receives as the HTMLTitle event.
+//
+// The HUD sends commands by changing the part of the address after '#'
+// (javascript: URLs are blocked by the game's browser; a '#' change does not
+// reload the page):
+//   #<id>|save|<URI-encoded JSON>  -> stores it, title = DNSAVE|saved|<id>|<length>
+// Replies:
+//   on load:  DNSAVE|load|ok|<launch count>|<settings JSON or empty>
+//   errors:   DNSAVE|error|<where>|<message>
+// The launch count increases on every load; a count that keeps rising across game
+// restarts shows the storage survives restarts.
 (function () {
-  var saves = 0;
+  var lastHandled = '';
 
   function say(text) { document.title = text; }
 
-  function store() {
+  function store(where) {
     try {
       var s = window.localStorage;
-      if (!s) { say('DNSAVE|error|load|localStorage missing'); return null; }
+      if (!s) { say('DNSAVE|error|' + where + '|localStorage missing'); return null; }
       return s;
     } catch (e) {
-      say('DNSAVE|error|load|' + (e && e.name ? e.name : e));
+      say('DNSAVE|error|' + where + '|' + (e && e.name ? e.name : e));
       return null;
     }
   }
 
-  window.dnSave = function (encoded) {
-    var s = store();
+  function handleHash() {
+    var h = location.hash ? location.hash.substring(1) : '';
+    if (!h || h === lastHandled) return;
+    lastHandled = h;
+    var first = h.indexOf('|'), second = h.indexOf('|', first + 1);
+    if (first < 0 || second < 0) return;
+    var id = h.substring(0, first);
+    var cmd = h.substring(first + 1, second);
+    var arg = h.substring(second + 1);
+    if (cmd !== 'save') return;
+    var s = store('save');
     if (!s) return;
     try {
-      var text = decodeURIComponent(encoded);
+      var text = decodeURIComponent(arg);
       JSON.parse(text);                       // refuse to store anything that is not JSON
       s.setItem('dn_cfg', text);
-      saves++;
-      say('DNSAVE|saved|' + saves + '|' + text.length);
+      say('DNSAVE|saved|' + id + '|' + text.length);
     } catch (e) {
       say('DNSAVE|error|save|' + (e && e.message ? e.message : e));
     }
-  };
+  }
 
-  window.dnClear = function () {
-    var s = store();
-    if (!s) return;
-    try { s.removeItem('dn_cfg'); say('DNSAVE|cleared'); }
-    catch (e) { say('DNSAVE|error|clear|' + (e && e.message ? e.message : e)); }
-  };
+  window.addEventListener('hashchange', handleHash);
 
-  var s = store();
+  var s = store('load');
   if (!s) return;
   try {
     var launches = (parseInt(s.getItem('dn_launches') || '0', 10) || 0) + 1;
