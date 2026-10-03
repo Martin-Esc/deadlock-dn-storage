@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>DNSAVE|starting</title>
+</head>
+<body>
+<script>
+// Save page for the damage numbers settings menu.
+// Published on GitHub Pages and loaded into a hidden 2x2 CitadelHTMLPanel by dn_menu.js
+// (minimalhealthbar mod, Deadlock HUD mod). It keeps the menu settings in this page's
+// localStorage and talks back to the HUD through document.title, which the HUD
+// receives as the HTMLTitle event.
+//   On load:       title = DNSAVE|load|ok|<launch count>|<settings JSON or empty>
+//   dnSave(text):  stores text (URI-encoded JSON), title = DNSAVE|saved|<n>|<length>
+//   On any error:  title = DNSAVE|error|<where>|<message>
+// The launch count increases on every load, so a log showing 1, then 2 after a
+// game restart proves the storage survives restarts.
+(function () {
+  var saves = 0;
+
+  function say(text) { document.title = text; }
+
+  function store() {
+    try {
+      var s = window.localStorage;
+      if (!s) { say('DNSAVE|error|load|localStorage missing'); return null; }
+      return s;
+    } catch (e) {
+      say('DNSAVE|error|load|' + (e && e.name ? e.name : e));
+      return null;
+    }
+  }
+
+  window.dnSave = function (encoded) {
+    var s = store();
+    if (!s) return;
+    try {
+      var text = decodeURIComponent(encoded);
+      JSON.parse(text);                       // refuse to store anything that is not JSON
+      s.setItem('dn_cfg', text);
+      saves++;
+      say('DNSAVE|saved|' + saves + '|' + text.length);
+    } catch (e) {
+      say('DNSAVE|error|save|' + (e && e.message ? e.message : e));
+    }
+  };
+
+  window.dnClear = function () {
+    var s = store();
+    if (!s) return;
+    try { s.removeItem('dn_cfg'); say('DNSAVE|cleared'); }
+    catch (e) { say('DNSAVE|error|clear|' + (e && e.message ? e.message : e)); }
+  };
+
+  var s = store();
+  if (!s) return;
+  try {
+    var launches = (parseInt(s.getItem('dn_launches') || '0', 10) || 0) + 1;
+    s.setItem('dn_launches', String(launches));
+    say('DNSAVE|load|ok|' + launches + '|' + (s.getItem('dn_cfg') || ''));
+  } catch (e) {
+    say('DNSAVE|error|load|' + (e && e.message ? e.message : e));
+  }
+})();
+</script>
+</body>
+</html>
